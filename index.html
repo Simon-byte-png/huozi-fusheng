@@ -26,70 +26,63 @@
       <div class="ambient__vignette"></div>
     </div>
 
-    <header class="topbar">
-      <a class="logo" href="#" aria-label="活字·复生">
-        <span class="logo__seal" aria-hidden="true">
-          <svg viewBox="0 0 100 100" role="presentation">
-            <rect x="4" y="4" width="92" height="92" rx="10" class="seal-frame" />
-            <line x1="50" y1="10" x2="50" y2="90" class="seal-rule" />
-            <line x1="10" y1="50" x2="90" y2="50" class="seal-rule" />
-            <text x="30" y="38" class="seal-char">活</text>
-            <text x="70" y="38" class="seal-char">字</text>
-            <text x="30" y="80" class="seal-char">复</text>
-            <text x="70" y="80" class="seal-char">生</text>
-          </svg>
-        </span>
-        <span class="logo__word">
-          <strong>活字<i>·</i>复生</strong>
-          <em>HUOZI · REBORN</em>
-        </span>
-      </a>
-      <div class="topbar__meta">
-        <span class="topbar__source">怀素《大草千字文》· 明成化摹刻本</span>
-        <button id="drawerToggle" class="ghost-pill" type="button">
-          <span class="ghost-pill__dot"></span>字源证明
-        </button>
-      </div>
-    </header>
-
-    <main class="stage">
-      <!-- 装裱式海报舞台 -->
-      <section class="artwork" aria-label="草书集字海报">
-        <div class="artwork__mat">
-          <div class="artwork__frame">
-            <canvas id="artCanvas" width="1200" height="1200"></canvas>
-            <div id="canvasVeil" class="artwork__veil"></div>
-          </div>
+    <div class="app">
+      <header class="topbar">
+        <a class="logo" href="#" aria-label="活字·复生">
+          <span class="logo__seal" aria-hidden="true">
+            <svg viewBox="0 0 100 100" role="presentation">
+              <rect x="4" y="4" width="92" height="92" rx="10" class="seal-frame" />
+              <line x1="50" y1="10" x2="50" y2="90" class="seal-rule" />
+              <line x1="10" y1="50" x2="90" y2="50" class="seal-rule" />
+              <text x="30" y="38" class="seal-char">活</text>
+              <text x="70" y="38" class="seal-char">字</text>
+              <text x="30" y="80" class="seal-char">复</text>
+              <text x="70" y="80" class="seal-char">生</text>
+            </svg>
+          </span>
+          <span class="logo__word">
+            <strong>活字<i>·</i>复生</strong>
+            <em>HUOZI · REBORN</em>
+          </span>
+        </a>
+        <div class="topbar__meta">
+          <span class="topbar__source">怀素《大草千字文》· 明成化摹刻本</span>
+          <button id="drawerToggle" class="ghost-pill" type="button">
+            <span class="ghost-pill__dot"></span>字源证明
+          </button>
         </div>
-        <div class="artwork__plate">
-          <div class="plate__coverage">
-            <strong id="coverage">0%</strong>
-            <span>原帖真字覆盖率</span>
+      </header>
+
+      <div class="layout">
+        <!-- 装裱式海报舞台 -->
+        <main class="stage" aria-label="草书集字海报">
+          <div class="artwork">
+            <div class="artwork__mat">
+              <div class="artwork__frame">
+                <canvas id="artCanvas" width="1200" height="1200"></canvas>
+                <div id="canvasVeil" class="artwork__veil"></div>
+              </div>
+            </div>
+            <p class="stage__caption">字字出怀素狂草真迹 · 可溯源到帖中页码坐标</p>
           </div>
-          <div class="plate__divider"></div>
-          <p class="plate__caption">字字出怀素狂草真迹 · 可溯源到帖中页码坐标</p>
-        </div>
-      </section>
-    </main>
+        </main>
 
-    <!-- 悬浮操作台 -->
-    <section class="dock" aria-label="创作面板">
-      <div class="dock__inner">
-        <label class="phrase" for="phrase">
-          <span class="phrase__tag">写几个字</span>
-          <input
-            id="phrase"
-            type="text"
-            maxlength="24"
-            autocomplete="off"
-            spellcheck="false"
-            value="云腾致雨"
-            placeholder="活字复生 / 墨迹成诗 / 天地玄黄"
-          />
-        </label>
+        <!-- 侧栏创作面板 -->
+        <aside class="panel" aria-label="创作面板">
+          <label class="phrase" for="phrase">
+            <span class="phrase__tag">写几个字</span>
+            <input
+              id="phrase"
+              type="text"
+              maxlength="24"
+              autocomplete="off"
+              spellcheck="false"
+              value="云腾致雨"
+              placeholder="活字复生 / 墨迹成诗 / 天地玄黄"
+            />
+          </label>
 
-        <div class="dock__row">
-          <div class="segmented" data-group="tone" role="group" aria-label="风格">
+          <div class="segmented" data-group="tone">
             <span class="segmented__label">风格</span>
             <div class="segmented__track">
               <button class="seg is-active" data-tone="warm" type="button">
@@ -104,7 +97,7 @@
             </div>
           </div>
 
-          <div class="segmented" data-group="ratio" role="group" aria-label="画幅">
+          <div class="segmented" data-group="ratio">
             <span class="segmented__label">画幅</span>
             <div class="segmented__track">
               <button class="seg is-active" data-ratio="square" type="button">
@@ -115,24 +108,33 @@
               </button>
             </div>
           </div>
-        </div>
 
-        <div class="dock__actions">
-          <button id="downloadBtn" class="btn btn--primary" type="button">
-            <svg viewBox="0 0 24 24" class="btn__ico"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 20h14" /></svg>
-            下载高清海报
-          </button>
-          <button id="explainBtn" class="btn" type="button">
-            <svg viewBox="0 0 24 24" class="btn__ico"><path d="M12 3a7 7 0 0 1 4 12.7V18H8v-2.3A7 7 0 0 1 12 3ZM9 21h6" /></svg>
-            AI 题解
-          </button>
-          <button id="randomBtn" class="btn" type="button">
-            <svg viewBox="0 0 24 24" class="btn__ico"><path d="M4 7h9m0 0-3-3m3 3-3 3M20 17h-9m0 0 3 3m-3-3 3-3" /></svg>
-            换一句
-          </button>
-        </div>
+          <div class="coverage">
+            <strong id="coverage">0%</strong>
+            <span>原帖真字覆盖率</span>
+          </div>
+
+          <div class="panel__actions">
+            <button id="downloadBtn" class="btn btn--primary" type="button">
+              <svg viewBox="0 0 24 24" class="btn__ico"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 20h14" /></svg>
+              下载高清海报
+            </button>
+            <div class="panel__actions-row">
+              <button id="explainBtn" class="btn" type="button">
+                <svg viewBox="0 0 24 24" class="btn__ico"><path d="M12 3a7 7 0 0 1 4 12.7V18H8v-2.3A7 7 0 0 1 12 3ZM9 21h6" /></svg>
+                AI 题解
+              </button>
+              <button id="randomBtn" class="btn" type="button">
+                <svg viewBox="0 0 24 24" class="btn__ico"><path d="M4 7h9m0 0-3-3m3 3-3 3M20 17h-9m0 0 3 3m-3-3 3-3" /></svg>
+                换一句
+              </button>
+            </div>
+          </div>
+
+          <p class="panel__hint">下载的是高清 PNG，直接发朋友圈。</p>
+        </aside>
       </div>
-    </section>
+    </div>
 
     <!-- 右侧抽屉：AI 题解 + 字源证明 -->
     <aside id="drawer" class="drawer" aria-hidden="true">

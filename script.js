@@ -176,6 +176,24 @@ function drawGlyph(img, x, y, size, p, index, synthetic) {
   ctx.restore();
 }
 
+/* 缺字 / 扫描损毁字：用墨色书法字体兜底，避免黑块 */
+function drawFontGlyph(ch, x, y, size, p, index) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate((seeded(index + 13) - 0.5) * 0.05);
+  ctx.fillStyle = p.ink;
+  ctx.globalAlpha = 0.82;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.shadowColor = "rgba(20,12,5,.18)";
+  ctx.shadowBlur = 2;
+  ctx.font = `700 ${Math.floor(size * 0.92)}px "Ma Shan Zheng", "KaiTi", "STKaiti", "SimKai", serif`;
+  ctx.fillText(ch, 0, 0);
+  ctx.globalAlpha = 0.22;
+  ctx.fillText(ch, 1.2, 1.4);
+  ctx.restore();
+}
+
 function drawCaption(text, x, y, size, p, alpha = 0.72, vertical = false) {
   ctx.save();
   ctx.fillStyle = p.accent;
@@ -206,9 +224,10 @@ async function render() {
   drawFrame(p);
 
   const chars = charsOf(phraseEl.value);
-  const trueCount = chars.filter(
-    (ch) => glyphData.glyphs[ch] && !glyphData.glyphs[ch].synthetic
-  ).length;
+  const trueCount = chars.filter((ch) => {
+    const g = glyphData.glyphs[ch];
+    return g && !g.synthetic && !g.unrecoverable;
+  }).length;
   coverageEl.textContent = chars.length
     ? `${Math.round((trueCount / chars.length) * 100)}%`
     : "0%";
@@ -228,18 +247,28 @@ async function render() {
   const blockH = (Math.min(chars.length, maxRows) - 1) * gapY;
   const startY = canvas.height / 2 - blockH / 2 + 24;
 
-  // 预加载全部字形，避免逐个 await 造成层叠错乱
-  const glyphs = chars.map((ch) => glyphData.glyphs[ch] || glyphData.glyphs["字"]);
-  const imgs = await Promise.all(glyphs.map((g) => loadImage(g.image).catch(() => null)));
+  // 判定每个字：可用真迹字模 vs 字体兜底（缺字/扫描损毁）
+  const entries = chars.map((ch) => {
+    const g = glyphData.glyphs[ch];
+    const usable = g && !g.unrecoverable;
+    return { ch, g, usable };
+  });
+  const imgs = await Promise.all(
+    entries.map((e) => (e.usable ? loadImage(e.g.image).catch(() => null) : Promise.resolve(null)))
+  );
   if (token !== renderToken) return; // 已有新的渲染请求
 
-  for (let i = 0; i < chars.length; i++) {
-    const g = glyphs[i];
-    const img = imgs[i];
-    if (!img) continue;
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
     const col = Math.floor(i / maxRows);
     const row = i % maxRows;
-    drawGlyph(img, centerX - col * gapX, startY + row * gapY, size, p, i, g.synthetic);
+    const gx = centerX - col * gapX;
+    const gy = startY + row * gapY;
+    if (e.usable && imgs[i]) {
+      drawGlyph(imgs[i], gx, gy, size, p, i, e.g.synthetic);
+    } else {
+      drawFontGlyph(e.ch, gx, gy, size, p, i);
+    }
   }
 
   drawCaption("字出怀素·大草千字文", 122, canvas.height - 116, 26, p, 0.66);
@@ -262,9 +291,18 @@ function renderTrace(chars) {
   const seen = new Set();
   const items = chars
     .map((ch) => {
-      const g = glyphData.glyphs[ch];
-      if (!g || seen.has(ch)) return "";
+      if (seen.has(ch)) return "";
       seen.add(ch);
+      const g = glyphData.glyphs[ch];
+      if (!g || g.unrecoverable) {
+        return `<article class="trace-item">
+          <div class="trace-thumb trace-thumb--font">${ch}</div>
+          <div class="trace-meta">
+            <strong>${ch}</strong>
+            <span class="is-synthetic">${g ? "原帖此字扫描损毁" : "帖中暂缺"} · 书法字体占位</span>
+          </div>
+        </article>`;
+      }
       const tag = g.synthetic ? "AI 补字占位" : "原帖真字";
       const cls = g.synthetic ? "is-synthetic" : "";
       return `<article class="trace-item">
