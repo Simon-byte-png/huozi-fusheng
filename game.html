@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>狂草猜猜猜｜识怀素狂草挑战</title>
+    <meta name="description" content="出示一个怀素狂草真迹，四选一猜是哪个字。实时对战、单人升段、字源溯源。" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='6' y='6' width='88' height='88' rx='14' fill='%23c53b2c'/%3E%3Ctext x='50' y='70' font-size='56' text-anchor='middle' fill='%23fbeed6' font-family='serif' font-weight='700'%3E草%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Noto+Serif+SC:wght@400;500;600;700;900&family=Ma+Shan+Zheng&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./game.css" />
+  </head>
+  <body>
+    <div class="ambient" aria-hidden="true">
+      <span class="ambient__glyph ambient__glyph--one">狂</span>
+      <span class="ambient__glyph ambient__glyph--two">草</span>
+      <div class="ambient__grain"></div>
+      <div class="ambient__vignette"></div>
+    </div>
+
+    <button id="soundToggle" class="sound-toggle" type="button" aria-label="声音开关" title="声音">
+      <svg viewBox="0 0 24 24" class="sound-on"><path d="M4 9v6h4l5 4V5L8 9H4Z" /><path d="M16 8a5 5 0 0 1 0 8" /><path d="M19 5a9 9 0 0 1 0 14" /></svg>
+      <svg viewBox="0 0 24 24" class="sound-off"><path d="M4 9v6h4l5 4V5L8 9H4Z" /><path d="m17 9 5 6M22 9l-5 6" /></svg>
+    </button>
+
+    <main class="wrap">
+      <!-- ============ 首页 ============ -->
+      <section id="home" class="screen is-active">
+        <div class="hero">
+          <div class="hero__seal">草</div>
+          <h1 class="hero__title">狂草猜猜猜</h1>
+          <p class="hero__sub">CURSIVE&nbsp;·&nbsp;GUESS</p>
+          <p class="hero__desc">怀素《大草千字文》真迹亮字，四选一猜楷书。<br />连击、计时、升段，看谁是草圣传人。</p>
+        </div>
+
+        <div class="rankcard" id="homeRank">
+          <div class="rankcard__badge" id="homeRankBadge">识草小白</div>
+          <div class="rankcard__bar"><i id="homeRankFill"></i></div>
+          <div class="rankcard__meta"><span id="homeRankXp">0 XP</span><span id="homeRankNext">距 识草学徒 600</span></div>
+        </div>
+
+        <label class="namefield">
+          <span>侠名</span>
+          <input id="playerName" type="text" maxlength="12" placeholder="给自己起个名号" />
+        </label>
+
+        <div class="modes">
+          <button class="mode mode--solo" data-go="solo" type="button">
+            <span class="mode__ico">単</span>
+            <span class="mode__txt"><strong>单人闯关升段</strong><em>从识草小白一路杀到草圣传人</em></span>
+          </button>
+          <button class="mode mode--versus" data-go="lobby" type="button">
+            <span class="mode__ico">双</span>
+            <span class="mode__txt"><strong>双人实时竞赛</strong><em>同房间同题目，谁快谁准谁赢</em></span>
+          </button>
+        </div>
+        <p class="tip">提示：耳机体验更佳 · 已内置古琴氛围音</p>
+      </section>
+
+      <!-- ============ 双人大厅 ============ -->
+      <section id="lobby" class="screen">
+        <button class="back" data-go="home" type="button">← 返回</button>
+        <h2 class="screen__title">双人实时竞赛</h2>
+        <div class="lobby">
+          <button class="lobby__card" data-mp="quick" type="button">
+            <b>快速匹配</b><span>丢进匹配池，秒配一位对手（无人时可与 AI 对练）</span>
+          </button>
+          <button class="lobby__card" data-mp="create" type="button">
+            <b>创建房间</b><span>生成房间码，发给朋友一起开局</span>
+          </button>
+          <div class="lobby__join">
+            <input id="joinCode" type="text" maxlength="4" placeholder="房间码" />
+            <button data-mp="join" type="button">加入</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 等待匹配 ============ -->
+      <section id="waiting" class="screen">
+        <button class="back" data-go="lobby" type="button">← 取消</button>
+        <div class="waiting">
+          <div class="waiting__spinner"><span></span><span></span><span></span></div>
+          <h2 id="waitTitle">正在寻找对手…</h2>
+          <p id="waitDesc" class="waiting__desc">同一片墨海，正为你寻一位对手</p>
+          <div id="waitCode" class="waiting__code" hidden>
+            房间码 <strong id="waitCodeVal">----</strong>
+            <button id="copyCode" type="button">复制</button>
+          </div>
+          <button id="playBot" class="ghost-btn" type="button" hidden>找不到对手？和 AI 对练 →</button>
+        </div>
+      </section>
+
+      <!-- ============ 答题 ============ -->
+      <section id="play" class="screen">
+        <div class="hud">
+          <div class="hud__left">
+            <div class="hud__progress">第 <span id="qIndex">1</span>/<span id="qTotal">10</span> 题</div>
+            <div class="hud__rank" id="playRank">识草小白</div>
+          </div>
+          <div class="timer" id="timer">
+            <svg viewBox="0 0 44 44"><circle class="timer__track" cx="22" cy="22" r="19" /><circle class="timer__fill" id="timerFill" cx="22" cy="22" r="19" /></svg>
+            <span id="timerNum">10</span>
+          </div>
+          <div class="hud__right">
+            <div class="score" id="score">0</div>
+            <div class="combo" id="combo">连击 ×0</div>
+          </div>
+        </div>
+
+        <!-- 对手条（仅双人） -->
+        <div class="versusbar" id="versusbar" hidden>
+          <div class="versusbar__side me">
+            <span class="versusbar__name">我</span>
+            <div class="versusbar__track"><i id="meFill"></i></div>
+            <span class="versusbar__score" id="meScore">0</span>
+          </div>
+          <span class="versusbar__vs">VS</span>
+          <div class="versusbar__side opp">
+            <span class="versusbar__score" id="oppScore">0</span>
+            <div class="versusbar__track"><i id="oppFill"></i></div>
+            <span class="versusbar__name" id="oppName">对手</span>
+          </div>
+        </div>
+
+        <div class="glyphstage">
+          <div class="glyphcard" id="glyphCard">
+            <img id="glyphImg" alt="狂草字" />
+          </div>
+          <div class="glyphstage__hint">这是哪个字？</div>
+        </div>
+
+        <div class="options" id="options"></div>
+
+        <!-- 判定 + 字源 + 毒舌 -->
+        <div class="verdict" id="verdict" hidden>
+          <div class="verdict__head" id="verdictHead">正确！</div>
+          <div class="verdict__roast" id="verdictRoast">…</div>
+          <button class="verdict__source" id="sourceBtn" type="button">看字源出处 →</button>
+          <div class="verdict__src" id="sourceInfo" hidden></div>
+          <button class="verdict__next" id="nextBtn" type="button">下一题 →</button>
+        </div>
+      </section>
+
+      <!-- ============ 结算 ============ -->
+      <section id="result" class="screen">
+        <div class="result">
+          <canvas id="shareCanvas" width="1080" height="1350"></canvas>
+          <div class="result__actions">
+            <button id="saveCard" class="btn btn--primary" type="button">保存分享卡</button>
+            <button id="againBtn" class="btn" type="button">再来一局</button>
+            <button data-go="home" class="btn" type="button">回首页</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./game.js"></script>
+  </body>
+</html>
