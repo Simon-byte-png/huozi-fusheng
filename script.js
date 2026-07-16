@@ -333,22 +333,34 @@ function flashNote(msg) {
   }, 2600);
 }
 
-phraseEl.addEventListener("input", () => {
+// 输入法（拼音等）合成中不过滤，避免把未上屏的拼音字母删掉导致打不了字
+let composing = false;
+
+function sanitizeInput() {
   if (allowed.size) {
     const raw = Array.from(phraseEl.value);
     const kept = raw.filter((ch) => allowed.has(ch));
     const dropped = raw.filter((ch) => ch.trim() && !allowed.has(ch));
     if (dropped.length) {
-      const pos = phraseEl.selectionStart;
       phraseEl.value = kept.join("");
-      try {
-        phraseEl.setSelectionRange(pos - dropped.length, pos - dropped.length);
-      } catch (e) {}
       const uniq = [...new Set(dropped)].join(" ");
       flashNote(`「${uniq}」不在《千字文》中，已忽略`);
     }
   }
   render();
+}
+
+phraseEl.addEventListener("compositionstart", () => {
+  composing = true;
+});
+phraseEl.addEventListener("compositionend", () => {
+  composing = false;
+  sanitizeInput();
+});
+phraseEl.addEventListener("input", (e) => {
+  // 合成中（拼音未上屏）先不动，等 compositionend 再校验
+  if (composing || e.isComposing) return;
+  sanitizeInput();
 });
 
 document.getElementById("randomBtn").addEventListener("click", () => {
