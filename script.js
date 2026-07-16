@@ -92,7 +92,7 @@ async function drawTitle(p) {
   ctx.strokeRect(82, 82, canvas.width - 164, canvas.height - 164);
   ctx.restore();
 
-  drawBrushText("活字复生", 122, 154, 62, p, 410);
+  drawCaption("活字复生", 122, 134, 34, p, 0.72);
 }
 
 async function drawGlyph(g, x, y, size, p, index) {
@@ -167,6 +167,17 @@ function drawBrushText(text, x, y, size, p, seedOffset = 0) {
   ctx.restore();
 }
 
+function drawCaption(text, x, y, size, p, alpha = 0.72) {
+  ctx.save();
+  ctx.fillStyle = p.ink;
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.font = `${size}px "Noto Serif CJK SC", "Songti SC", "STSong", "SimSun", serif`;
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
 async function render() {
   if (!glyphData) return;
   resizeCanvas();
@@ -195,7 +206,7 @@ async function render() {
     await drawGlyph(g, centerX - col * gapX, startY + row * gapY, size, p, i);
   }
 
-  drawBrushText("字出怀素", 122, canvas.height - 118, 32, p, 700);
+  drawCaption("字出怀素", 122, canvas.height - 118, 28, p, 0.72);
   drawSeal(canvas.width - 178, canvas.height - 178, "复", p.seal, 78);
   renderTrace(chars);
 }
