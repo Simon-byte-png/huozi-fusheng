@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>活字·复生｜怀素草书集字海报</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="studio">
+        <aside class="controls">
+          <div class="brand">
+            <span class="seal">活</span>
+            <div>
+              <h1>活字·复生</h1>
+              <p>集怀素笔意，成一纸草书。</p>
+            </div>
+          </div>
+
+          <label class="field">
+            <span>写几个字</span>
+            <textarea id="phrase" rows="3" maxlength="32" placeholder="例如：活字复生 / 墨迹成诗 / 天地玄黄">云腾致雨</textarea>
+          </label>
+
+          <div class="style-grid">
+            <label>
+              <span>画幅</span>
+              <select id="ratio">
+                <option value="square">朋友圈方图</option>
+                <option value="story">竖版海报</option>
+              </select>
+            </label>
+            <label>
+              <span>风格</span>
+              <select id="paperTone">
+                <option value="warm">温宣墨色</option>
+                <option value="dark">墨拓金字</option>
+                <option value="red">朱砂题字</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="actions">
+            <button id="downloadBtn" class="primary">下载图片</button>
+            <button id="explainBtn">AI 讲解</button>
+            <button id="randomBtn">换一句</button>
+          </div>
+
+          <div class="coverage">
+            <strong id="coverage">0%</strong>
+            <span>原帖真字覆盖率</span>
+          </div>
+
+          <section class="ai-card">
+            <h2>讲解文案</h2>
+            <p id="explainText">请君落字，怀素为你题解。</p>
+          </section>
+        </aside>
+
+        <section class="preview">
+          <canvas id="artCanvas" width="1200" height="1200" aria-label="草书集字海报"></canvas>
+          <p class="hint">输入文字后会自动重排；下载的是高清 PNG。</p>
+        </section>
+
+        <aside class="proof">
+          <h2>字源证明</h2>
+          <p>每个字来自怀素《大草千字文》的真实扫描坐标；缺字会标注为 AI 补字占位，后续可离线补全。</p>
+          <div id="traceList" class="trace-list"></div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

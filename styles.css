@@ -1,0 +1,275 @@
+:root {
+  --ink: #1c211d;
+  --muted: #71685c;
+  --paper: #f4ead6;
+  --panel: rgba(255, 250, 238, 0.92);
+  --line: rgba(47, 34, 20, 0.16);
+  --seal: #a43128;
+  --green: #173d34;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 252, 238, 0.72), transparent 32%),
+    linear-gradient(135deg, #e8dcc7 0%, #c9b99f 100%);
+  font-family: ui-serif, "Noto Serif CJK SC", "Songti SC", serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.shell {
+  min-height: 100vh;
+  padding: 22px;
+}
+
+.studio {
+  display: grid;
+  grid-template-columns: 340px minmax(360px, 1fr) 300px;
+  gap: 18px;
+  max-width: 1480px;
+  margin: 0 auto;
+  align-items: start;
+}
+
+.controls,
+.proof {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+  box-shadow: 0 18px 50px rgba(33, 24, 14, 0.12);
+}
+
+.brand {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.seal {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  color: #f9ead0;
+  background: var(--seal);
+  border: 2px solid #7d221c;
+  font-size: 32px;
+  font-weight: 800;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 31px;
+  line-height: 1.06;
+  letter-spacing: 0;
+}
+
+h2 {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.brand p,
+.hint,
+.proof p,
+.ai-card p,
+.coverage span,
+.field span,
+.style-grid span {
+  color: var(--muted);
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.field span,
+.style-grid span {
+  font-size: 14px;
+}
+
+textarea,
+input,
+select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fffaf0;
+  color: var(--ink);
+}
+
+textarea {
+  min-height: 112px;
+  resize: vertical;
+  padding: 12px;
+  line-height: 1.7;
+  font-size: 20px;
+}
+
+input,
+select {
+  height: 42px;
+  padding: 0 10px;
+}
+
+.actions button {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff7e9;
+  color: var(--ink);
+}
+
+.style-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.actions button {
+  height: 44px;
+  font-weight: 700;
+}
+
+.actions .primary {
+  color: #fff7e8;
+  background: var(--green);
+}
+
+.coverage {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 248, 233, 0.76);
+  margin-bottom: 14px;
+}
+
+.coverage strong {
+  font-size: 28px;
+}
+
+.ai-card {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  line-height: 1.7;
+}
+
+.preview {
+  min-width: 0;
+  text-align: center;
+}
+
+#artCanvas {
+  display: block;
+  width: min(100%, 720px);
+  height: auto;
+  margin: 0 auto;
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: 0 26px 90px rgba(32, 22, 12, 0.28);
+}
+
+.hint {
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+.proof {
+  max-height: calc(100vh - 44px);
+  overflow: auto;
+  line-height: 1.65;
+}
+
+.trace-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.trace-item {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(255, 249, 236, 0.78);
+}
+
+.trace-thumb {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+}
+
+.trace-meta strong {
+  display: block;
+  font-size: 18px;
+}
+
+.trace-meta span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 1120px) {
+  .studio {
+    grid-template-columns: 330px 1fr;
+  }
+
+  .proof {
+    grid-column: 1 / -1;
+    max-height: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .shell {
+    padding: 12px;
+  }
+
+  .studio {
+    grid-template-columns: 1fr;
+  }
+
+  h1 {
+    font-size: 27px;
+  }
+}
