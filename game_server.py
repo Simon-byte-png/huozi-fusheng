@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """狂草猜猜猜 —— 实时草书识字竞技游戏后端。
 
-复用怀素《大草千字文》真迹字模：出示一个草书字，四选一猜楷书。
-- 单人闯关升段
-- 双人实时匹配竞赛（快速匹配 / 房间码 / bot 兜底）
-- 字源溯源、mimo 毒舌评语（无 key 时用本地毒舌池）
-纯标准库实现，内存态 + 惰性计算 bot 进度，HTTP 轮询同步。
+复用怀素《大草千字文》真迹字模：出示草书字，四选一猜楷书。
+- 固定题库（启动时用定种子生成，一次性下发，客户端预加载图片+本地判题，零延迟）
+- 双人实时竞赛（快速匹配 / 房间码 / bot 兜底；客户端上报进度，服务端中转）
+- 单人闯关升段；结算汇总评语（mimo 或本地池）+ 逐题字源溯源
+纯标准库，内存态，HTTP 轮询同步。
 """
 import json
-import math
 import mimetypes
 import os
 import random
@@ -22,125 +21,93 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-
-# ---------- 载入字库 ----------
 GLYPHS = json.loads((ROOT / "data" / "glyphs.json").read_text(encoding="utf-8"))["glyphs"]
 # 题目池：真帖清晰字（非合成、非损毁）
 TARGET_POOL = [c for c, v in GLYPHS.items() if not v.get("synthetic") and not v.get("unrecoverable")]
-# 干扰项池：同为真帖字，避免生僻
-DISTRACT_POOL = list(TARGET_POOL)
 
 RANKS = ["识草小白", "识草学徒", "临帖秀才", "草书举人", "狂草高手", "怀素门生", "草圣传人"]
 
-# ---------- 全局状态 ----------
-LOCK = threading.RLock()
-ANSWER_KEY = {}      # qid -> 正确字
-QUESTION_META = {}   # qid -> {image,page,x,y}
-QUEUE = []           # 快速匹配等待的 pid
-ROOMS = {}           # roomId -> room
-PLAYERS = {}         # pid -> {name, roomId}
-CODES = {}           # code -> roomId
-
-ROAST_GOOD = [
-    "眼力毒辣，怀素见了都要点头。",
-    "这都认得出来？下一轮加大难度。",
-    "手感在线，草圣传人预定。",
-    "稳，稳得像一千年的墨。",
-    "行家一出手，就知有没有。",
-]
-ROAST_BAD = [
-    "这字虽狂，可没狂到让你瞎猜的地步。",
-    "怀素落笔如飞，你落选也如飞。",
-    "再看仔细点，别辜负了这一纸狂草。",
-    "猜错不可怕，可怕的是猜得这么自信。",
-    "别急，这只是你和草圣的第一道鸿沟。",
-]
-
-
-def make_question():
-    target = random.choice(TARGET_POOL)
-    g = GLYPHS[target]
-    pool = [c for c in DISTRACT_POOL if c != target]
-    distractors = random.sample(pool, 3)
-    options = [target] + distractors
-    random.shuffle(options)
-    qid = uuid.uuid4().hex[:12]
-    with LOCK:
-        ANSWER_KEY[qid] = target
-        QUESTION_META[qid] = {
+# ---------- 固定题库（定种子，写死；每次启动一致） ----------
+BANK_SIZE = 160
+def build_bank():
+    rng = random.Random(20260716)
+    chars = list(TARGET_POOL)
+    rng.shuffle(chars)
+    bank = []
+    used = 0
+    for ch in chars:
+        if used >= BANK_SIZE:
+            break
+        g = GLYPHS[ch]
+        pool = [c for c in TARGET_POOL if c != ch]
+        distractors = rng.sample(pool, 3)
+        options = [ch] + distractors
+        rng.shuffle(options)
+        bank.append({
+            "qid": "q%03d" % used,
+            "char": ch,
             "image": g["image"],
+            "options": options,
+            "answer": ch,
+            "correctIndex": options.index(ch),
             "page": g.get("pageNumber"),
             "x": g.get("x"),
             "y": g.get("y"),
-        }
-        # 控制内存
-        if len(ANSWER_KEY) > 8000:
-            for k in list(ANSWER_KEY)[:2000]:
-                ANSWER_KEY.pop(k, None)
-                QUESTION_META.pop(k, None)
-    return {
-        "qid": qid,
-        "image": g["image"],
-        "options": options,
-        "page": g.get("pageNumber"),
-        "x": g.get("x"),
-        "y": g.get("y"),
-    }
+        })
+        used += 1
+    return bank
 
+BANK = build_bank()
+BANK_BY_QID = {q["qid"]: q for q in BANK}
 
-def score_for(correct, time_ms, combo):
-    if not correct:
-        return 0
-    base = 100
-    speed = max(0, int(120 - time_ms / 40))   # 越快加分越多，最多 +120
-    combo_bonus = min(combo, 8) * 25
-    return base + speed + combo_bonus
+# ---------- 全局状态 ----------
+LOCK = threading.RLock()
+QUEUE = []          # 快速匹配等待的 pid
+ROOMS = {}          # roomId -> room
+PLAYERS = {}        # pid -> {name, roomId}
+CODES = {}          # code -> roomId
+
+ROAST_TIERS = [
+    # (最低正确率, 评语池)
+    (0.95, ["满堂彩！这一纸狂草在你眼里如同楷书，草圣传人稳了。",
+             "看穿了怀素的每一笔，这眼力该去博物馆坐镇。"]),
+    (0.75, ["八九不离十，怀素的狂草也拦不住你几眼。",
+             "好手感，再练两局就能跟草圣掰手腕了。"]),
+    (0.5, ["一半靠眼力一半靠缘分，草书的门你已经推开一条缝。",
+            "中规中矩，狂草认到这份上，朋友圈够炫了。"]),
+    (0.25, ["狂草确实狂，你被甩了几条街，但比多数人强。",
+             "别灰心，怀素当年也是从看不懂开始的。"]),
+    (0.0, ["这一局怀素赢麻了，回去多临几张帖再来。",
+            "四个选项像四道谜，你猜得比抛硬币还随缘。"]),
+]
 
 
 def now_ms():
     return int(time.time() * 1000)
 
 
-def gen_questions(n):
-    return [make_question() for _ in range(n)]
+def score_for(correct, time_ms, combo):
+    if not correct:
+        return 0
+    return 100 + max(0, int(120 - time_ms / 40)) + min(combo, 8) * 25
 
 
-def public_question(q):
-    return {k: q[k] for k in ("qid", "image", "options", "page", "x", "y")}
-
-
-def new_room(mode, n=10):
+# ---------- 房间 ----------
+def new_room():
     rid = uuid.uuid4().hex[:10]
-    room = {
-        "id": rid,
-        "mode": mode,
-        "questions": gen_questions(n),
-        "players": {},          # pid -> player state
-        "order": [],            # pid 顺序
-        "state": "waiting",     # waiting | playing | finished
-        "startAt": None,
-        "createdAt": now_ms(),
-        "code": None,
-    }
+    qids = [q["qid"] for q in random.sample(BANK, 10)]
+    room = {"id": rid, "qids": qids, "players": {}, "order": [],
+            "state": "waiting", "startAt": None, "createdAt": now_ms(), "code": None}
     ROOMS[rid] = room
     return room
 
 
 def add_player(room, name, is_bot=False):
     pid = ("bot_" if is_bot else "p_") + uuid.uuid4().hex[:10]
-    p = {
-        "pid": pid,
-        "name": name,
-        "score": 0,
-        "combo": 0,
-        "progress": 0,       # 已答题数
-        "answered": {},      # qid -> choice
-        "done": False,
-        "isBot": is_bot,
-    }
+    p = {"pid": pid, "name": name, "score": 0, "progress": 0, "done": False, "isBot": is_bot}
     if is_bot:
-        p["botAcc"] = 0.62
-        p["botInterval"] = random.randint(2600, 4200)
+        p["botAcc"] = 0.6
+        p["botInterval"] = random.randint(2600, 4400)
         p["botSeed"] = random.random()
     room["players"][pid] = p
     room["order"].append(pid)
@@ -151,46 +118,36 @@ def add_player(room, name, is_bot=False):
 
 def start_room(room):
     room["state"] = "playing"
-    room["startAt"] = now_ms() + 3200   # 3 秒倒计时
+    room["startAt"] = now_ms() + 3200
 
 
-def bot_state(room, p):
-    """惰性根据经过时间计算 bot 的进度与分数（无需后台线程）。"""
+def bot_tick(room, p):
     if room["startAt"] is None:
         return
     elapsed = now_ms() - room["startAt"]
     if elapsed <= 0:
         return
-    n = len(room["questions"])
+    n = len(room["qids"])
     prog = min(n, int(elapsed // p["botInterval"]))
     if prog <= p["progress"]:
         return
-    rng = random.Random(hash((p["botSeed"], p["progress"])) & 0xffffffff)
-    for i in range(p["progress"], prog):
-        correct = rng.random() < p["botAcc"]
-        if correct:
-            p["combo"] += 1
-            p["score"] += score_for(True, rng.randint(1200, 3200), p["combo"])
-        else:
-            p["combo"] = 0
+    rng = random.Random(int(p["botSeed"] * 1e9) + p["progress"])
+    for _ in range(p["progress"], prog):
+        if rng.random() < p["botAcc"]:
+            p["score"] += score_for(True, rng.randint(1200, 3200), 0) + 40
     p["progress"] = prog
     if prog >= n:
         p["done"] = True
 
 
 def room_view(room, pid):
-    # 结算 bot
-    for q_pid, p in room["players"].items():
+    for p in room["players"].values():
         if p["isBot"]:
-            bot_state(room, p)
-    if room["state"] == "playing" and all(p["done"] for p in room["players"].values()):
+            bot_tick(room, p)
+    if room["state"] == "playing" and room["players"] and all(p["done"] for p in room["players"].values()):
         room["state"] = "finished"
     me = room["players"].get(pid)
-    opp = None
-    for q_pid, p in room["players"].items():
-        if q_pid != pid:
-            opp = p
-            break
+    opp = next((p for q, p in room["players"].items() if q != pid), None)
     winner = None
     if room["state"] == "finished":
         ranked = sorted(room["players"].values(), key=lambda x: -x["score"])
@@ -199,15 +156,11 @@ def room_view(room, pid):
         elif ranked:
             winner = ranked[0]["pid"]
     return {
-        "state": room["state"],
-        "startAt": room["startAt"],
-        "count": len(room["questions"]),
-        "questions": [public_question(q) for q in room["questions"]] if room["state"] != "waiting" else [],
-        "me": None if not me else {"score": me["score"], "combo": me["combo"], "progress": me["progress"], "done": me["done"]},
-        "opp": None if not opp else {
-            "name": opp["name"], "score": opp["score"], "progress": opp["progress"],
-            "done": opp["done"], "isBot": opp["isBot"],
-        },
+        "state": room["state"], "startAt": room["startAt"], "count": len(room["qids"]),
+        "qids": room["qids"] if room["state"] != "waiting" else [],
+        "me": None if not me else {"score": me["score"], "progress": me["progress"], "done": me["done"]},
+        "opp": None if not opp else {"name": opp["name"], "score": opp["score"],
+                                     "progress": opp["progress"], "done": opp["done"], "isBot": opp["isBot"]},
         "winner": winner,
     }
 
@@ -221,29 +174,35 @@ def cleanup():
                 CODES.pop(r["code"], None)
 
 
-def mimo_roast(char, correct, streak, mode):
+def mimo_summary(correct, total, best_combo, mode, win):
     key = os.environ.get("MIMO_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
     base = os.environ.get("MIMO_BASE_URL") or os.environ.get("ANTHROPIC_BASE_URL") or "https://token-plan-cn.xiaomimimo.com/anthropic"
     model = os.environ.get("MIMO_MODEL", "mimo-v2.5")
     if not key:
         raise RuntimeError("no key")
-    verdict = "猜对了" if correct else "猜错了"
+    ctx = "双人对战" + ("获胜" if win else "落败") if mode == "versus" else "单人闯关"
     prompt = (
-        "你是懂书法又毒舌的解说。用简体中文，针对怀素《大草千字文》里的草书字给玩家一句点评。"
-        f"这个字是「{char}」，玩家{verdict}，当前连击 {streak}。"
-        "要求：先一句极简草法/字形特点（20字内），再一句毒舌但不低俗的评语（30字内）。共两短句，别超过60字，不要编造史实。"
+        "你是懂书法又毒舌的解说。用简体中文，为一局『怀素狂草识字』游戏写一句结算总评。"
+        f"成绩：{ctx}，答对 {correct}/{total}，最高连击 {best_combo}。"
+        "要求：一句话，40字以内，先夸或损，再点一句和怀素狂草有关的小结，别编史实。"
     )
-    body = {"model": model, "max_tokens": 400, "messages": [{"role": "user", "content": prompt}]}
-    req = urllib.request.Request(
-        base.rstrip("/") + "/v1/messages",
+    body = {"model": model, "max_tokens": 200, "messages": [{"role": "user", "content": prompt}]}
+    req = urllib.request.Request(base.rstrip("/") + "/v1/messages",
         data=json.dumps(body).encode("utf-8"),
         headers={"Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=20) as resp:
+        method="POST")
+    with urllib.request.urlopen(req, timeout=18) as resp:
         data = json.loads(resp.read().decode("utf-8"))
     parts = [it["text"] for it in data.get("content", []) if it.get("type") == "text" and it.get("text")]
-    return "\n".join(parts).strip()
+    return " ".join(parts).strip()
+
+
+def local_summary(correct, total):
+    acc = correct / total if total else 0
+    for thr, pool in ROAST_TIERS:
+        if acc >= thr:
+            return random.choice(pool)
+    return random.choice(ROAST_TIERS[-1][1])
 
 
 # ---------- HTTP ----------
@@ -256,120 +215,101 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         self.wfile.write(data)
 
     def _body(self):
-        length = int(self.headers.get("Content-Length", "0") or "0")
-        if not length:
+        n = int(self.headers.get("Content-Length", "0") or "0")
+        if not n:
             return {}
         try:
-            return json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            return json.loads(self.rfile.read(n).decode("utf-8") or "{}")
         except Exception:
             return {}
 
-    # ---- POST ----
     def do_POST(self):
         path = self.path.split("?", 1)[0].rstrip("/")
-        body = self._body()
+        b = self._body()
         try:
-            if path == "/api/answer":
-                return self._answer(body)
-            if path == "/api/roast":
-                return self._roast(body)
-            if path == "/api/questions":
-                return self._json(200, {"questions": gen_questions(int(body.get("n", 10)))})
+            if path == "/api/summary":
+                return self._summary(b)
             if path == "/api/mp/quick":
-                return self._mp_quick(body)
+                return self._mp_quick(b)
             if path == "/api/mp/bot":
-                return self._mp_bot(body)
+                return self._mp_bot(b)
             if path == "/api/mp/create":
-                return self._mp_create(body)
+                return self._mp_create(b)
             if path == "/api/mp/join":
-                return self._mp_join(body)
-            if path == "/api/mp/answer":
-                return self._mp_answer(body)
+                return self._mp_join(b)
+            if path == "/api/mp/report":
+                return self._mp_report(b)
             if path == "/api/mp/leave":
-                return self._mp_leave(body)
+                return self._mp_leave(b)
             return self._json(404, {"error": "not found"})
         except Exception as exc:
             return self._json(500, {"error": str(exc)})
 
-    def _answer(self, body):
-        qid = str(body.get("qid", ""))
-        choice = str(body.get("choice", ""))
-        with LOCK:
-            ans = ANSWER_KEY.get(qid)
-            meta = QUESTION_META.get(qid, {})
-        if ans is None:
-            return self._json(400, {"error": "题目已过期"})
-        return self._json(200, {
-            "correct": choice == ans, "answer": ans,
-            "page": meta.get("page"), "x": meta.get("x"), "y": meta.get("y"),
-        })
-
-    def _roast(self, body):
-        char = str(body.get("char", ""))
-        correct = bool(body.get("correct"))
-        streak = int(body.get("streak", 0))
-        mode = str(body.get("mode", ""))
+    def _summary(self, b):
+        correct = int(b.get("correct", 0))
+        total = int(b.get("total", 0)) or 1
+        best = int(b.get("bestCombo", 0))
+        mode = str(b.get("mode", "solo"))
+        win = bool(b.get("win"))
         try:
-            text = mimo_roast(char, correct, streak, mode)
-            if text:
-                return self._json(200, {"text": text, "source": "mimo"})
+            t = mimo_summary(correct, total, best, mode, win)
+            if t:
+                return self._json(200, {"text": t, "source": "mimo"})
         except Exception:
             pass
-        pool = ROAST_GOOD if correct else ROAST_BAD
-        return self._json(200, {"text": random.choice(pool), "source": "local"})
+        return self._json(200, {"text": local_summary(correct, total), "source": "local"})
 
-    def _mp_quick(self, body):
-        name = str(body.get("name", "无名剑客"))[:16] or "无名剑客"
+    def _mp_quick(self, b):
+        name = str(b.get("name", "无名剑客"))[:16] or "无名剑客"
         with LOCK:
             cleanup()
-            # 找一个仍在等待的对手，并入它的房间
             while QUEUE:
-                other_pid = QUEUE.pop(0)
-                info = PLAYERS.get(other_pid)
+                other = QUEUE.pop(0)
+                info = PLAYERS.get(other)
                 room = ROOMS.get(info["roomId"]) if info and info.get("roomId") else None
                 if room and room["state"] == "waiting" and len(room["players"]) == 1:
                     pid = add_player(room, name)
                     start_room(room)
                     return self._json(200, {"pid": pid, "roomId": room["id"], "matched": True})
-            # 无人等待：自己建房挂起、进队列
-            room = new_room("versus")
+            room = new_room()
             pid = add_player(room, name)
             QUEUE.append(pid)
             return self._json(200, {"pid": pid, "roomId": room["id"], "matched": False})
 
-    def _mp_bot(self, body):
-        pid = str(body.get("pid", ""))
+    def _mp_bot(self, b):
+        pid = str(b.get("pid", ""))
         with LOCK:
             if pid in QUEUE:
                 QUEUE.remove(pid)
             info = PLAYERS.get(pid)
-            if not info or not ROOMS.get(info.get("roomId")):
+            room = ROOMS.get(info["roomId"]) if info and info.get("roomId") else None
+            if not room:
                 return self._json(400, {"error": "会话失效"})
-            room = ROOMS[info["roomId"]]
             if len(room["players"]) < 2:
-                add_player(room, random.choice(["墨小侠", "临池客", "狂草生", "笔痴", "砚台君"]), is_bot=True)
+                add_player(room, random.choice(["墨小侠", "临池客", "狂草生", "笔痴生", "砚台君"]), is_bot=True)
             if room["state"] == "waiting":
                 start_room(room)
             return self._json(200, {"roomId": room["id"], "matched": True})
 
-    def _mp_create(self, body):
-        name = str(body.get("name", "房主"))[:16] or "房主"
+    def _mp_create(self, b):
+        name = str(b.get("name", "房主"))[:16] or "房主"
         with LOCK:
             cleanup()
-            room = new_room("versus")
+            room = new_room()
             code = "".join(random.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(4))
             room["code"] = code
             CODES[code] = room["id"]
             pid = add_player(room, name)
             return self._json(200, {"pid": pid, "roomId": room["id"], "code": code})
 
-    def _mp_join(self, body):
-        name = str(body.get("name", "挑战者"))[:16] or "挑战者"
-        code = str(body.get("code", "")).upper().strip()
+    def _mp_join(self, b):
+        name = str(b.get("name", "挑战者"))[:16] or "挑战者"
+        code = str(b.get("code", "")).upper().strip()
         with LOCK:
             rid = CODES.get(code)
             room = ROOMS.get(rid) if rid else None
@@ -381,46 +321,27 @@ class Handler(BaseHTTPRequestHandler):
             start_room(room)
             return self._json(200, {"pid": pid, "roomId": room["id"]})
 
-    def _mp_answer(self, body):
-        rid = str(body.get("roomId", ""))
-        pid = str(body.get("pid", ""))
-        qid = str(body.get("qid", ""))
-        choice = str(body.get("choice", ""))
-        time_ms = int(body.get("timeMs", 3000))
+    def _mp_report(self, b):
+        rid = str(b.get("roomId", ""))
+        pid = str(b.get("pid", ""))
         with LOCK:
             room = ROOMS.get(rid)
             if not room or pid not in room["players"]:
                 return self._json(400, {"error": "房间失效"})
             p = room["players"][pid]
-            ans = ANSWER_KEY.get(qid)
-            if ans is None:
-                return self._json(400, {"error": "题目过期"})
-            if qid in p["answered"]:
-                return self._json(200, {"correct": p["answered"][qid] == ans, "answer": ans, "dup": True})
-            correct = choice == ans
-            p["answered"][qid] = choice
-            p["progress"] += 1
-            if correct:
-                p["combo"] += 1
-                p["score"] += score_for(True, time_ms, p["combo"])
-            else:
-                p["combo"] = 0
-            if p["progress"] >= len(room["questions"]):
+            p["score"] = max(p["score"], int(b.get("score", p["score"])))
+            p["progress"] = max(p["progress"], int(b.get("progress", p["progress"])))
+            if b.get("done"):
                 p["done"] = True
-            meta = QUESTION_META.get(qid, {})
-            return self._json(200, {
-                "correct": correct, "answer": ans, "score": p["score"], "combo": p["combo"],
-                "page": meta.get("page"), "x": meta.get("x"), "y": meta.get("y"),
-            })
+            return self._json(200, {"ok": True})
 
-    def _mp_leave(self, body):
-        pid = str(body.get("pid", ""))
+    def _mp_leave(self, b):
+        pid = str(b.get("pid", ""))
         with LOCK:
             if pid in QUEUE:
                 QUEUE.remove(pid)
         return self._json(200, {"ok": True})
 
-    # ---- GET ----
     def do_GET(self):
         path = self.path.split("?", 1)[0]
         qs = {}
@@ -430,7 +351,9 @@ class Handler(BaseHTTPRequestHandler):
                     k, v = kv.split("=", 1)
                     qs[k] = urllib.parse.unquote(v)
         if path == "/health":
-            return self._json(200, {"ok": True, "pool": len(TARGET_POOL)})
+            return self._json(200, {"ok": True, "bank": len(BANK)})
+        if path == "/api/bank":
+            return self._json(200, {"bank": BANK, "ranks": RANKS})
         if path == "/api/mp/status":
             pid = qs.get("pid", "")
             with LOCK:
@@ -439,13 +362,11 @@ class Handler(BaseHTTPRequestHandler):
                 matched = bool(room and len(room["players"]) >= 2 and room["state"] != "waiting")
                 return self._json(200, {"matched": matched, "roomId": room["id"] if room else None})
         if path == "/api/mp/room":
-            rid = qs.get("roomId", "")
-            pid = qs.get("pid", "")
             with LOCK:
-                room = ROOMS.get(rid)
+                room = ROOMS.get(qs.get("roomId", ""))
                 if not room:
                     return self._json(404, {"error": "房间不存在"})
-                return self._json(200, room_view(room, pid))
+                return self._json(200, room_view(room, qs.get("pid", "")))
         return self._serve_static(path)
 
     def _serve_static(self, path):
@@ -464,7 +385,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Cache-Control", "public, max-age=86400" if rel.startswith("assets/") else "no-cache")
         self.end_headers()
         self.wfile.write(data)
 
@@ -475,15 +396,14 @@ def load_dotenv():
         return
     for line in env.read_text(encoding="utf-8").splitlines():
         line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, v = line.split("=", 1)
-        os.environ.setdefault(k.strip(), v.strip())
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
 
 
 if __name__ == "__main__":
     load_dotenv()
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("PORT", "8000"))
-    print(f"狂草猜猜猜 on {host}:{port}  题库 {len(TARGET_POOL)} 字")
+    print(f"狂草猜猜猜 on {host}:{port}  固定题库 {len(BANK)} 题")
     ThreadingHTTPServer((host, port), Handler).serve_forever()

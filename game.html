@@ -137,26 +137,21 @@
         </div>
 
         <div class="options" id="options"></div>
-
-        <!-- 判定 + 字源 + 毒舌 -->
-        <div class="verdict" id="verdict" hidden>
-          <div class="verdict__head" id="verdictHead">正确！</div>
-          <div class="verdict__roast" id="verdictRoast">…</div>
-          <button class="verdict__source" id="sourceBtn" type="button">看字源出处 →</button>
-          <div class="verdict__src" id="sourceInfo" hidden></div>
-          <button class="verdict__next" id="nextBtn" type="button">下一题 →</button>
-        </div>
+        <div class="flash" id="flash" hidden></div>
       </section>
 
       <!-- ============ 结算 ============ -->
       <section id="result" class="screen">
         <div class="result">
+          <p id="resultComment" class="result__comment">怀素正在给这一局落评…</p>
           <canvas id="shareCanvas" width="1080" height="1350"></canvas>
           <div class="result__actions">
             <button id="saveCard" class="btn btn--primary" type="button">保存分享卡</button>
             <button id="againBtn" class="btn" type="button">再来一局</button>
             <button data-go="home" class="btn" type="button">回首页</button>
           </div>
+          <button id="toggleReview" class="linkbtn" type="button">逐题看字源出处 ▾</button>
+          <div id="reviewList" class="review" hidden></div>
         </div>
       </section>
     </main>
