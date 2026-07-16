@@ -4,72 +4,159 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>活字·复生｜怀素草书集字海报</title>
+    <meta name="description" content="集怀素《大草千字文》真迹字模，成一纸可分享的草书海报。" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='6' y='6' width='88' height='88' rx='12' fill='%23c53b2c'/%3E%3Ctext x='50' y='68' font-size='58' text-anchor='middle' fill='%23fbeed6' font-family='serif' font-weight='700'%3E活%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Noto+Serif+SC:wght@300;400;500;600;700;900&family=Ma+Shan+Zheng&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <section class="studio">
-        <aside class="controls">
-          <div class="brand">
-            <span class="seal">活</span>
-            <div>
-              <h1>活字·复生</h1>
-              <p>集怀素笔意，成一纸草书。</p>
-            </div>
+    <!-- 氛围层：巨幅草字水印 + 纸纹 + 暗角 -->
+    <div class="ambient" aria-hidden="true">
+      <span class="ambient__glyph ambient__glyph--one">草</span>
+      <span class="ambient__glyph ambient__glyph--two">书</span>
+      <div class="ambient__grain"></div>
+      <div class="ambient__vignette"></div>
+    </div>
+
+    <header class="topbar">
+      <a class="logo" href="#" aria-label="活字·复生">
+        <span class="logo__seal" aria-hidden="true">
+          <svg viewBox="0 0 100 100" role="presentation">
+            <rect x="4" y="4" width="92" height="92" rx="10" class="seal-frame" />
+            <line x1="50" y1="10" x2="50" y2="90" class="seal-rule" />
+            <line x1="10" y1="50" x2="90" y2="50" class="seal-rule" />
+            <text x="30" y="38" class="seal-char">活</text>
+            <text x="70" y="38" class="seal-char">字</text>
+            <text x="30" y="80" class="seal-char">复</text>
+            <text x="70" y="80" class="seal-char">生</text>
+          </svg>
+        </span>
+        <span class="logo__word">
+          <strong>活字<i>·</i>复生</strong>
+          <em>HUOZI · REBORN</em>
+        </span>
+      </a>
+      <div class="topbar__meta">
+        <span class="topbar__source">怀素《大草千字文》· 明成化摹刻本</span>
+        <button id="drawerToggle" class="ghost-pill" type="button">
+          <span class="ghost-pill__dot"></span>字源证明
+        </button>
+      </div>
+    </header>
+
+    <main class="stage">
+      <!-- 装裱式海报舞台 -->
+      <section class="artwork" aria-label="草书集字海报">
+        <div class="artwork__mat">
+          <div class="artwork__frame">
+            <canvas id="artCanvas" width="1200" height="1200"></canvas>
+            <div id="canvasVeil" class="artwork__veil"></div>
           </div>
-
-          <label class="field">
-            <span>写几个字</span>
-            <textarea id="phrase" rows="3" maxlength="32" placeholder="例如：活字复生 / 墨迹成诗 / 天地玄黄">云腾致雨</textarea>
-          </label>
-
-          <div class="style-grid">
-            <label>
-              <span>画幅</span>
-              <select id="ratio">
-                <option value="square">朋友圈方图</option>
-                <option value="story">竖版海报</option>
-              </select>
-            </label>
-            <label>
-              <span>风格</span>
-              <select id="paperTone">
-                <option value="warm">温宣墨色</option>
-                <option value="dark">墨拓金字</option>
-                <option value="red">朱砂题字</option>
-              </select>
-            </label>
-          </div>
-
-          <div class="actions">
-            <button id="downloadBtn" class="primary">下载图片</button>
-            <button id="explainBtn">AI 讲解</button>
-            <button id="randomBtn">换一句</button>
-          </div>
-
-          <div class="coverage">
+        </div>
+        <div class="artwork__plate">
+          <div class="plate__coverage">
             <strong id="coverage">0%</strong>
             <span>原帖真字覆盖率</span>
           </div>
-
-          <section class="ai-card">
-            <h2>讲解文案</h2>
-            <p id="explainText">请君落字，怀素为你题解。</p>
-          </section>
-        </aside>
-
-        <section class="preview">
-          <canvas id="artCanvas" width="1200" height="1200" aria-label="草书集字海报"></canvas>
-          <p class="hint">输入文字后会自动重排；下载的是高清 PNG。</p>
-        </section>
-
-        <aside class="proof">
-          <h2>字源证明</h2>
-          <p>每个字来自怀素《大草千字文》的真实扫描坐标；缺字会标注为 AI 补字占位，后续可离线补全。</p>
-          <div id="traceList" class="trace-list"></div>
-        </aside>
+          <div class="plate__divider"></div>
+          <p class="plate__caption">字字出怀素狂草真迹 · 可溯源到帖中页码坐标</p>
+        </div>
       </section>
     </main>
+
+    <!-- 悬浮操作台 -->
+    <section class="dock" aria-label="创作面板">
+      <div class="dock__inner">
+        <label class="phrase" for="phrase">
+          <span class="phrase__tag">写几个字</span>
+          <input
+            id="phrase"
+            type="text"
+            maxlength="24"
+            autocomplete="off"
+            spellcheck="false"
+            value="云腾致雨"
+            placeholder="活字复生 / 墨迹成诗 / 天地玄黄"
+          />
+        </label>
+
+        <div class="dock__row">
+          <div class="segmented" data-group="tone" role="group" aria-label="风格">
+            <span class="segmented__label">风格</span>
+            <div class="segmented__track">
+              <button class="seg is-active" data-tone="warm" type="button">
+                <i class="seg__chip" style="--c1:#f7eedb;--c2:#d8bd8f"></i>温宣
+              </button>
+              <button class="seg" data-tone="dark" type="button">
+                <i class="seg__chip" style="--c1:#1c4a40;--c2:#0e2823"></i>墨拓
+              </button>
+              <button class="seg" data-tone="red" type="button">
+                <i class="seg__chip" style="--c1:#f4dcc0;--c2:#c04a3a"></i>朱砂
+              </button>
+            </div>
+          </div>
+
+          <div class="segmented" data-group="ratio" role="group" aria-label="画幅">
+            <span class="segmented__label">画幅</span>
+            <div class="segmented__track">
+              <button class="seg is-active" data-ratio="square" type="button">
+                <i class="seg__ratio seg__ratio--sq"></i>方图
+              </button>
+              <button class="seg" data-ratio="story" type="button">
+                <i class="seg__ratio seg__ratio--st"></i>竖版
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="dock__actions">
+          <button id="downloadBtn" class="btn btn--primary" type="button">
+            <svg viewBox="0 0 24 24" class="btn__ico"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 20h14" /></svg>
+            下载高清海报
+          </button>
+          <button id="explainBtn" class="btn" type="button">
+            <svg viewBox="0 0 24 24" class="btn__ico"><path d="M12 3a7 7 0 0 1 4 12.7V18H8v-2.3A7 7 0 0 1 12 3ZM9 21h6" /></svg>
+            AI 题解
+          </button>
+          <button id="randomBtn" class="btn" type="button">
+            <svg viewBox="0 0 24 24" class="btn__ico"><path d="M4 7h9m0 0-3-3m3 3-3 3M20 17h-9m0 0 3 3m-3-3 3-3" /></svg>
+            换一句
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 右侧抽屉：AI 题解 + 字源证明 -->
+    <aside id="drawer" class="drawer" aria-hidden="true">
+      <div class="drawer__head">
+        <h2>题解 · 字源</h2>
+        <button id="drawerClose" class="drawer__close" type="button" aria-label="关闭">×</button>
+      </div>
+
+      <section class="drawer__section">
+        <div class="drawer__label">
+          <span class="drawer__dot"></span>AI 书法题解
+        </div>
+        <p id="explainText" class="ai-text">请君落字，怀素为你题解。</p>
+      </section>
+
+      <section class="drawer__section drawer__section--proof">
+        <div class="drawer__label">
+          <span class="drawer__dot"></span>字源证明
+          <em>每字来自帖中真实扫描坐标</em>
+        </div>
+        <div id="traceList" class="trace-list"></div>
+      </section>
+    </aside>
+    <div id="scrim" class="scrim" aria-hidden="true"></div>
 
     <script src="./script.js"></script>
   </body>
