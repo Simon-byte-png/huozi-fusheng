@@ -210,6 +210,7 @@ function showQuestion() {
   el("sourceInfo").hidden = true;
   const card = el("glyphCard");
   card.classList.remove("correct", "wrong");
+  if (!el("glyphImg")) card.innerHTML = '<img id="glyphImg" alt="狂草字" />';
   el("glyphImg").src = "./" + q.image;
   // 选项
   const box = el("options");
