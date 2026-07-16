@@ -9,7 +9,11 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-STATIC_ROOT = ROOT / "dist"
+# 优先使用构建产物 dist/，否则直接以项目根目录作为静态根（部署时无需单独构建）
+STATIC_ROOT = ROOT / "dist" if (ROOT / "dist" / "index.html").exists() else ROOT
+# 禁止对外暴露的路径前缀与后缀
+BLOCKED_PREFIXES = (".git", ".zaocode", ".env", "tools/", "server.py")
+BLOCKED_SUFFIXES = (".py", ".md")
 
 
 def load_dotenv():
@@ -95,8 +99,15 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/":
             path = "/index.html"
-        target = (STATIC_ROOT / path.lstrip("/")).resolve()
-        if not str(target).startswith(str(STATIC_ROOT.resolve())) or not target.exists() or target.is_dir():
+        rel = path.lstrip("/")
+        blocked = rel.startswith(BLOCKED_PREFIXES) or rel.endswith(BLOCKED_SUFFIXES)
+        target = (STATIC_ROOT / rel).resolve()
+        if (
+            blocked
+            or not str(target).startswith(str(STATIC_ROOT.resolve()))
+            or not target.exists()
+            or target.is_dir()
+        ):
             target = STATIC_ROOT / "index.html"
         data = target.read_bytes()
         ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"

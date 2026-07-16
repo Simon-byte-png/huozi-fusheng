@@ -10,18 +10,21 @@ const traceList = document.getElementById("traceList");
 const explainText = document.getElementById("explainText");
 const artwork = document.querySelector(".artwork");
 
-const state = { tone: "warm", ratio: "square" };
+const state = { ratio: "square" };
+// 示例全部取自《千字文》，且字字为原帖真迹，保证呈现效果
 const samples = [
-  "云腾致雨",
-  "露结为霜",
-  "秋收冬藏",
   "天地玄黄",
-  "活字复生",
-  "闲云野鹤",
-  "笔走龙蛇",
+  "云腾致雨",
+  "秋收冬藏",
+  "金生丽水",
+  "川流不息",
+  "渊澄取映",
+  "空谷传声",
+  "福缘善庆",
 ];
 
 let glyphData;
+let allowed = new Set(); // 《千字文》可输入字集
 const imageCache = new Map();
 let renderToken = 0;
 
@@ -59,12 +62,7 @@ function resizeCanvas() {
 }
 
 function palette() {
-  if (state.tone === "dark") {
-    return { bg1: "#1b463c", bg2: "#0c221d", ink: "#ecd8ac", line: "rgba(231,205,150,.32)", seal: "#c2402f", accent: "#e8d3a3" };
-  }
-  if (state.tone === "red") {
-    return { bg1: "#f6e6cf", bg2: "#dbb98a", ink: "#9a2b23", line: "rgba(115,60,35,.24)", seal: "#1b463c", accent: "#7a2019" };
-  }
+  // 温宣墨色（唯一风格）
   return { bg1: "#f6ecd7", bg2: "#dcc296", ink: "#231f18", line: "rgba(71,50,25,.22)", seal: "#b3392c", accent: "#5a4a2c" };
 }
 
@@ -159,20 +157,13 @@ function drawGlyph(img, x, y, size, p, index, synthetic) {
   ctx.globalAlpha = synthetic ? 0.5 : 0.96;
   ctx.shadowColor = "rgba(20,12,5,.18)";
   ctx.shadowBlur = 2;
-  ctx.filter = state.tone === "dark" ? "sepia(1) saturate(1.7) brightness(1.75)" : "none";
   const ratio = img.width / img.height;
   const drawH = size * scaleY;
   const drawW = drawH * ratio * scaleX;
   ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
-  if (state.tone === "warm") {
-    ctx.globalAlpha = synthetic ? 0.2 : 0.34;
-    ctx.drawImage(img, -drawW / 2 + 1, -drawH / 2 + 1, drawW, drawH);
-  }
-  if (state.tone === "red") {
-    ctx.globalCompositeOperation = "source-atop";
-    ctx.fillStyle = p.ink;
-    ctx.fillRect(-size, -size, size * 2, size * 2);
-  }
+  // 叠一层加深墨色，笔画更有分量
+  ctx.globalAlpha = synthetic ? 0.2 : 0.34;
+  ctx.drawImage(img, -drawW / 2 + 1, -drawH / 2 + 1, drawW, drawH);
   ctx.restore();
 }
 
@@ -323,13 +314,42 @@ document.querySelectorAll(".seg").forEach((btn) => {
     const track = btn.parentElement;
     track.querySelectorAll(".seg").forEach((b) => b.classList.remove("is-active"));
     btn.classList.add("is-active");
-    if (btn.dataset.tone) state.tone = btn.dataset.tone;
     if (btn.dataset.ratio) state.ratio = btn.dataset.ratio;
     renderWithSwap();
   });
 });
 
-phraseEl.addEventListener("input", render);
+/* 输入限制：只允许《千字文》字库中的字 */
+const inputNote = document.getElementById("inputNote");
+let noteTimer;
+function flashNote(msg) {
+  if (!inputNote) return;
+  inputNote.textContent = msg;
+  inputNote.classList.add("is-warn");
+  window.clearTimeout(noteTimer);
+  noteTimer = window.setTimeout(() => {
+    inputNote.classList.remove("is-warn");
+    inputNote.textContent = `只可输入《千字文》中的字 · 共 ${allowed.size} 字`;
+  }, 2600);
+}
+
+phraseEl.addEventListener("input", () => {
+  if (allowed.size) {
+    const raw = Array.from(phraseEl.value);
+    const kept = raw.filter((ch) => allowed.has(ch));
+    const dropped = raw.filter((ch) => ch.trim() && !allowed.has(ch));
+    if (dropped.length) {
+      const pos = phraseEl.selectionStart;
+      phraseEl.value = kept.join("");
+      try {
+        phraseEl.setSelectionRange(pos - dropped.length, pos - dropped.length);
+      } catch (e) {}
+      const uniq = [...new Set(dropped)].join(" ");
+      flashNote(`「${uniq}」不在《千字文》中，已忽略`);
+    }
+  }
+  render();
+});
 
 document.getElementById("randomBtn").addEventListener("click", () => {
   let next = phraseEl.value;
@@ -394,6 +414,10 @@ fetch("./data/glyphs.json")
   .then((r) => r.json())
   .then((data) => {
     glyphData = data;
+    allowed = new Set(Object.keys(data.glyphs));
+    if (inputNote) inputNote.textContent = `只可输入《千字文》中的字 · 共 ${allowed.size} 字`;
+    // 过滤初始值中的非法字
+    phraseEl.value = Array.from(phraseEl.value).filter((ch) => allowed.has(ch)).join("");
     render();
   })
   .catch(() => {
